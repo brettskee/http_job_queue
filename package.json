@@ -1,0 +1,25 @@
+{
+  "name": "job_scheduler",
+  "version": "0.0.1",
+  "description": "A job scheduler behind a set of API endpoints for queueing API calls",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/brettskee/job_scheduler"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/brettskee/job_scheduler/issues"
+  },
+  "homepage": "https://github.com/brettskee/job_scheduler",
+  "dependencies": {
+    "body-parser": "^1.12.4",
+    "express": "^4.12.3",
+    "kue": "^0.9.3",
+    "request": "^2.55.0"
+  }
+}
