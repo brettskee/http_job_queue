@@ -36,6 +36,16 @@ app.use(function(req, res, next) {
 		var r = request.get(job.data.url, function(err, resp, body) {
 			// Now we'll decide what to do based on the results of the request
 			if(err || resp.statusCode !== 200) {
+				console.log("An error occurred while making the GET request:", err);
+				console.log("The status code was:", resp.statusCode);
+
+				// Write the statusCode to Redis for later retrieval
+				rdclient.hmset(['q:job:'+job.id, 'respBody', 'Error', 'respStatus', resp.statusCode ], function(redisError, redisResult) {
+					if(redisError) {
+						console.log("An error occurred while saving to Redis:", redisError);
+						return done(redisError);
+					}
+				});
 				// All is not good in the hood, so end processing and throw the error returned by request
 				return done(err);
 			};
@@ -53,14 +63,28 @@ app.use(function(req, res, next) {
 
 	// Creating some functions to avoid some of the right drift in jobs.process
 	req.makePostRequest = function(job, done) {
-		var r = request.post(job.data.url, job.data.params, function(err, resp, body) {
+		console.log("Making a post request with the following params:", job.data.params);
+		var r = request.post({ url: job.data.url, form: job.data.params }, function(err, resp, body) {
 			// Now we'll decide what to do based on the results of the request
-			if(err || resp.statusCode !== 200) {
+			if(err || (resp.statusCode !== 200 && resp.statusCode !== 201)) { // 200 OK, or 201 Created are both ok
 				// All is not good in the hood, so end processing and throw the error returned by request
+				console.log("An error occurred during the POST request:", err);
+				console.log("The status code was:", resp.statusCode);
+
+				// Write the nature of the error to Redis for later retrieval
+				rdclient.hmset(['q:job:'+job.id, 'respBody', 'Error', 'respStatus', resp.statusCode ], function(redisError, redisResult) {
+					if(redisError) {
+						console.log("An error occurred while saving to Redis:", redisError);
+						return done(redisError);
+					}
+				});
+
 				return done(err);
 			};
 
 			// Now attach the results to the job itself in Redis
+			console.log("response body:", body);
+			console.log("respContentType:", resp.headers["content-type"]);
 			rdclient.hmset(['q:job:'+job.id, 'respBody', body, 'respContentType', resp.headers['content-type'] ], function(redisError, redisResult) {
 				if(redisError) 
 					return done(redisError); // end if an error occurred.
@@ -103,18 +127,12 @@ app.use(function(req, res, next) {
 
 
 		job.save(function(err) {
-			console.log("job.save() started.");
-			console.log("this callback should only be triggered once the save has occurred and jobId #%d is available.", job.id);
 
 			// Check if an error occurred on save
 			if(err) 
-				console.log("problem saving job with id", job.id);
+				console.log("There was a problem saving job with ID #%d.", job.id);
 
 			cb(job);
-
-			// process.nextTick(function() { cb(job); });
-
-			console.log("job.save() finished.");
 
 		}); // saves the new job to the queue
 
@@ -129,10 +147,17 @@ app.get('/jobs/:id', function(req, res) {
 	var jobId = req.params.id;
 
 	// Look up the job in the redis db
-	rdclient.hmget(['q:job:'+jobId, 'respBody', 'respContentType'], function(redisError, response) {
+	rdclient.hmget(['q:job:'+jobId, 'respBody', 'respContentType', 'respStatus'], function(redisError, response) {
 		if(redisError) {
 			res.set('Content-Type', 'text/html');
-			res.send("<h2>Job " + jobId + " not yet complete.</h2><p><a html=\"/jobs/"+jobId+"\">Click to Repeat Your Request</a></p>");
+			res.send("<h2>Job " + jobId + " not yet complete.</h2><p><a href=\"/jobs/"+jobId+"\">Click to Repeat Your Request</a></p>");
+		} else if(response[0] === "Error") {
+			// If a statusCode other than 200 (or 201 for POST requests) is received, we'll fill respBody[0] with 'Error'
+			res.set('Content-Type', 'text/plain');
+			res.send("Something went wrong during your request. (StatusCode was: "+response[2]+") Please try again.\n");
+		} else if(!response[0]) {
+			res.set('Content-Type', 'text/html');
+			res.send("<h2>Job "+jobId+":<p>The response was empty. This may have been an error or this could be the standard response for the request you made.</p>");
 		} else {
 			// Grab data from redis
 			var contentType = response[1];
@@ -160,7 +185,7 @@ app.post('/jobs', function(req, res) {
 
 	// Create is not returning a jobId properly. Not really surprising now that I looked again.
 	// Need to think about how to get this jobId into the response without doing something awful in the global scope like I currently am.
-	req.create(verb, url, params, function(lastJob) {
+	req.create(verb.toLowerCase(), url, params, function(lastJob) {
 		console.log("job.save() callback has started running.");
 
 		// If user includes a query param f with value text, send a plain text response back to the client
