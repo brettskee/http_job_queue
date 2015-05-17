@@ -53,7 +53,7 @@ app.use(function(req, res, next) {
 
 	// Creating some functions to avoid some of the right drift in jobs.process
 	req.makePostRequest = function(job, done) {
-		var r = request.get(job.data.url, job.data.params, function(err, resp, body) {
+		var r = request.post(job.data.url, job.data.params, function(err, resp, body) {
 			// Now we'll decide what to do based on the results of the request
 			if(err || resp.statusCode !== 200) {
 				// All is not good in the hood, so end processing and throw the error returned by request
@@ -149,13 +149,18 @@ app.get('/jobs/:id', function(req, res) {
 app.post('/jobs', function(req, res) {
 
 	// Initialize some vars based on parsed body
-	var body = req.body;
-	body.params = body.params || null;
-	var verb = body.method || "get";
+	var url = req.body.url;
+	var verb = req.body.method || "get";
+	var params = extend({}, req.body); // Make a copy of the body object
+
+	// Now we delete url and method from the params object so they won't be included in the params
+	delete params.url;
+	delete params.method;
+
 
 	// Create is not returning a jobId properly. Not really surprising now that I looked again.
 	// Need to think about how to get this jobId into the response without doing something awful in the global scope like I currently am.
-	req.create(verb, body.url, body.params, function(lastJob) {
+	req.create(verb, url, params, function(lastJob) {
 		console.log("job.save() callback has started running.");
 
 		// If user includes a query param f with value text, send a plain text response back to the client
