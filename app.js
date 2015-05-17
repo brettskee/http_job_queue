@@ -16,47 +16,20 @@ var express = require("express"),
 	kue = require("kue"),
 	bodyParser = require("body-parser"),
 	request = require("request"),
+	extend = require("util")._extend, // I need to be able to copy the body object that comes through
 	app = express();
-
-// To support new event emissions in Kue
-var events = require('kue/lib/queue/events');
 
 // Create the jobs queue
 var jobs = kue.createQueue();
 
 // We'll also want to make it easier to access the redis client that Kue creates
 var rdclient = kue.Job.client;
-global.lastJobId = 0; // Cheap workaround for the moment. And it doesn't work on the very first post request for some reason.
 
 // Set up body parser for processing POSTs
 app.use(bodyParser.urlencoded({extended: true}));
 
-// Now set up a hash where we can store completed jobs
-// Structure will be { jobId: jobResult }
-app.use(function(req, res, next) {
-
-	// Setting up some additional variables I think I'll need as middleware
-	req.completedJobs = req.completedJobs || {};
-
-	next();
-});
-
-
 // Now put my custom Kue functions into middleware
 app.use(function(req, res, next) {
-
-	// Helper functions
-	req.helpers = {};
-
-	// Helpers: encode ascii text in base64
-	req.helpers.base64encode = function base64encode(str) {
-		return new Buffer(str).toString('base64');
-	}
-
-	// Helpers: decode base64 text into ascii
-	req.helpers.base64decode = function base64decode(b64) {
-		return new Buffer(b64, 'base64').toString('ascii');
-	}
 
 	// Creating some functions to avoid some of the right drift in jobs.process
 	req.makeGetRequest = function(job, done) {
@@ -66,10 +39,6 @@ app.use(function(req, res, next) {
 				// All is not good in the hood, so end processing and throw the error returned by request
 				return done(err);
 			};
-
-			// The request results should be back
-			// Store the response in a local hash so that we can access the results synchronously.
-			req.completedJobs[job.id] = req.helpers.base64encode(body); // base64encode the results to avoid problems with newlines etc.
 
 			// Now attach the results to the job itself in Redis
 			rdclient.hmset(['q:job:'+job.id, 'respBody', body, 'respContentType', resp.headers['content-type'] ], function(redisError, redisResult) {
@@ -90,10 +59,6 @@ app.use(function(req, res, next) {
 				// All is not good in the hood, so end processing and throw the error returned by request
 				return done(err);
 			};
-
-			// The request results should be back
-			// Store the response in a local hash so that we can access the results synchronously.
-			req.completedJobs[job.id] = req.helpers.base64encode(body); // base64encode the results to avoid problems with newlines etc.
 
 			// Now attach the results to the job itself in Redis
 			rdclient.hmset(['q:job:'+job.id, 'respBody', body, 'respContentType', resp.headers['content-type'] ], function(redisError, redisResult) {
