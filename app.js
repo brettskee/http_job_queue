@@ -1,7 +1,7 @@
 // app.js
 // Application for Massdrop Coding Challenge
 
-// Brett Levenson, 5/14/15
+// Brett Levenson, 5/15/15
 // Description:
 /**
 * 
@@ -127,131 +127,131 @@ app.get('/jobs/:id', function(req, res) {
 
 // Here's a post version of the add to queue endpoint
 app.route('/jobs')
-	.all(function(req, res, next) {
-		// Create function: (set up for creation by either get or post)
-		// verb: the HTTP verb to use for the request
-		// url: the URL for the API call
-		// params: An object with key:value pairs (optional for get, required for post)
-		// cb: A callback to execute the response to the client
+.all(function(req, res, next) {
+	// Create function: (set up for creation by either get or post)
+	// verb: the HTTP verb to use for the request
+	// url: the URL for the API call
+	// params: An object with key:value pairs (optional for get, required for post)
+	// cb: A callback to execute the response to the client
 
-		req.create = function(verb, url, params, cb) {
+	req.create = function(verb, url, params, cb) {
 
-			// Do some error checking to make sure all post requests include a params object
-			if(verb === 'post' && !params) {
-				throw new Error("A post request must include a params object.");
-				return;
-			}
-
-			// So, we create a new job
-			var job = jobs.create(verb, { url: url, params: params });
-
-			// Now set some event handlers for success and failure
-			job.on('complete', function() {
-				console.log('JOB #%d IS COMPLETE', job.id);
-			}).on('failed', function(err) {
-				console.log('JOB #%d FAILED', job.id);
-			});
-
-			// Essentially, I'm using an immediately invoked function, that takes a callback as a parameter
-			// as a way to ensure I'll be setting req.lastJob at a time when that information is available.
-
-
-			job.save(function(err) {
-
-				// Check if an error occurred on save
-				if(err) 
-					console.log("There was a problem saving job with ID #%d.", job.id);
-
-				cb(job);
-
-			}); // saves the new job to the queue
-
-		};
-
-		next();
-	})
-	.post(function(req, res) { // Post for this specific route
-
-		// Initialize some vars based on parsed body
-		var url = req.body.url;
-		var verb = req.body.method || "get";
-		var params = extend({}, req.body); // Make a copy of the body object
-
-		// Now we delete url and method from the params object so they won't be included in the params
-		delete params.url;
-		delete params.method;
-
-
-		// Create is not returning a jobId properly. Not really surprising now that I looked again.
-		// Need to think about how to get this jobId into the response without doing something awful in the global scope like I currently am.
-		req.create(verb.toLowerCase(), url, params, function(lastJob) {
-
-			// If user includes a query param f with value text, send a plain text response back to the client
-			if(req.query.f === "text") {
-				res.set('Content-Type', 'text/plain');
-				var textResponse = "Job #" + lastJob.id + " has been queued.\n";
-				textResponse += "Use GET /jobs/"+lastJob.id+" to check the status of your job.";
-				res.send(textResponse);
-			} else {
-				res.set('Content-Type', 'text/html');
-				var htmlResponse = "<h2>Job #" + lastJob.id + " has been queued.</h2>";
-				htmlResponse += "<p>Use GET /jobs/"+lastJob.id+" to check its status (and retrieve results once available.)</p>";
-				htmlResponse += "<p>You can also <a href=\"/jobs/"+lastJob.id+"\">click here</a> to check and see if the results are available.";
-				res.send(htmlResponse);
-			}
-
-		});
-	})
-	.get(function(req, res) {
-		// You can test making a post request with this:
-		// http://localhost:3000/jobs?url=http://postcatcher.in/catchers/555821a7f902920300002f76&method=post&p=topic:tshirts+cool
-
-		var url = req.query.url;
-		if(!url)
-			res.send("You must include a URL as a query parameter to add a job using a GET request");
-
-		var verb = req.query.method || "get";
-
-		// This function parses params in attached to req.query.p
-		// p=key:value,key:value, as part of a larger string ?url=http://domain.com/&method=post&p=key:value,key:value
-		req.createParams = function(str) {
-			if(!str)
-				return null; // If req.query.p was undefined, return null
-
-			var obj = {};
-			x = str.split(',');
-			for(var i = 0; i < x.length; i++) {
-				var split = x[i].split(":");
-				if(split[0].trim() !== "method" && split[0].trim() !== "url") {
-					obj[split[0].trim()] = split[1].trim();
-				}
-			}
-			return obj;
+		// Do some error checking to make sure all post requests include a params object
+		if(verb === 'post' && !params) {
+			throw new Error("A post request must include a params object.");
+			return;
 		}
-		
-		// Build the params object
-		var params = req.createParams(req.query.p);
 
-		// Now let's create the job request
-		req.create(verb.toLowerCase(), url, params, function(lastJob) {
+		// So, we create a new job
+		var job = jobs.create(verb, { url: url, params: params });
 
-			// If user includes a query param f with value text, send a plain text response back to the client
-			if(req.query.f === "text") {
-				res.set('Content-Type', 'text/plain');
-				var textResponse = "Job #" + lastJob.id + " has been queued.\n";
-				textResponse += "Use GET /jobs/"+lastJob.id+" to check the status of your job.";
-				res.send(textResponse);
-			} else {
-				res.set('Content-Type', 'text/html');
-				var htmlResponse = "<h2>Job #" + lastJob.id + " has been queued.</h2>";
-				htmlResponse += "<p>Use GET /jobs/"+lastJob.id+" to check its status (and retrieve results once available.)</p>";
-				htmlResponse += "<p>You can also <a href=\"/jobs/"+lastJob.id+"\">click here</a> to check and see if the results are available.";
-				res.send(htmlResponse);
-			}
-
+		// Now set some event handlers for success and failure
+		job.on('complete', function() {
+			console.log('JOB #%d IS COMPLETE', job.id);
+		}).on('failed', function(err) {
+			console.log('JOB #%d FAILED', job.id);
 		});
+
+		// Essentially, I'm using an immediately invoked function, that takes a callback as a parameter
+		// as a way to ensure I'll be setting req.lastJob at a time when that information is available.
+
+
+		job.save(function(err) {
+
+			// Check if an error occurred on save
+			if(err) 
+				console.log("There was a problem saving job with ID #%d.", job.id);
+
+			cb(job);
+
+		}); // saves the new job to the queue
+
+	};
+
+	next();
+})
+.post(function(req, res) { // Post for this specific route
+
+	// Initialize some vars based on parsed body
+	var url = req.body.url;
+	var verb = req.body.method || "get";
+	var params = extend({}, req.body); // Make a copy of the body object
+
+	// Now we delete url and method from the params object so they won't be included in the params
+	delete params.url;
+	delete params.method;
+
+
+	// Create is not returning a jobId properly. Not really surprising now that I looked again.
+	// Need to think about how to get this jobId into the response without doing something awful in the global scope like I currently am.
+	req.create(verb.toLowerCase(), url, params, function(lastJob) {
+
+		// If user includes a query param f with value text, send a plain text response back to the client
+		if(req.query.f === "text") {
+			res.set('Content-Type', 'text/plain');
+			var textResponse = "Job #" + lastJob.id + " has been queued.\n";
+			textResponse += "Use GET /jobs/"+lastJob.id+" to check the status of your job.";
+			res.send(textResponse);
+		} else {
+			res.set('Content-Type', 'text/html');
+			var htmlResponse = "<h2>Job #" + lastJob.id + " has been queued.</h2>";
+			htmlResponse += "<p>Use GET /jobs/"+lastJob.id+" to check its status (and retrieve results once available.)</p>";
+			htmlResponse += "<p>You can also <a href=\"/jobs/"+lastJob.id+"\">click here</a> to check and see if the results are available.";
+			res.send(htmlResponse);
+		}
 
 	});
+})
+.get(function(req, res) {
+	// You can test making a post request with this:
+	// http://localhost:3000/jobs?url=http://postcatcher.in/catchers/555821a7f902920300002f76&method=post&p=topic:tshirts+cool
+
+	var url = req.query.url;
+	if(!url)
+		res.send("You must include a URL as a query parameter to add a job using a GET request");
+
+	var verb = req.query.method || "get";
+
+	// This function parses params in attached to req.query.p
+	// p=key:value,key:value, as part of a larger string ?url=http://domain.com/&method=post&p=key:value,key:value
+	req.createParams = function(str) {
+		if(!str)
+			return null; // If req.query.p was undefined, return null
+
+		var obj = {};
+		x = str.split(',');
+		for(var i = 0; i < x.length; i++) {
+			var split = x[i].split(":");
+			if(split[0].trim() !== "method" && split[0].trim() !== "url") {
+				obj[split[0].trim()] = split[1].trim();
+			}
+		}
+		return obj;
+	}
+	
+	// Build the params object
+	var params = req.createParams(req.query.p);
+
+	// Now let's create the job request
+	req.create(verb.toLowerCase(), url, params, function(lastJob) {
+
+		// If user includes a query param f with value text, send a plain text response back to the client
+		if(req.query.f === "text") {
+			res.set('Content-Type', 'text/plain');
+			var textResponse = "Job #" + lastJob.id + " has been queued.\n";
+			textResponse += "Use GET /jobs/"+lastJob.id+" to check the status of your job.";
+			res.send(textResponse);
+		} else {
+			res.set('Content-Type', 'text/html');
+			var htmlResponse = "<h2>Job #" + lastJob.id + " has been queued.</h2>";
+			htmlResponse += "<p>Use GET /jobs/"+lastJob.id+" to check its status (and retrieve results once available.)</p>";
+			htmlResponse += "<p>You can also <a href=\"/jobs/"+lastJob.id+"\">click here</a> to check and see if the results are available.";
+			res.send(htmlResponse);
+		}
+
+	});
+
+});
 
 // Set up the server on port 3000
 app.listen(3000, function() {
